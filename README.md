@@ -12,7 +12,7 @@ This project implements a collaborative bot system where each bot has a speciali
 - **L4 Bot**: Creates mathematical content (theorems, lemmas, examples, etc.)
 - **Review Bot**: Reviews mathematical content for accuracy
 
-The system also includes a tournament mechanism to generate multiple candidate outputs and select the best ones through a round-robin competition.
+The system also includes a tournament mechanism to generate multiple candidate outputs and select the best ones through an Elo based round-robin competition.
 
 ## 🏗️ Architecture
 
