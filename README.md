@@ -38,7 +38,7 @@ Each level operates with its own context and responsibilities:
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Google Cloud API key with access to Gemini models
 
 ### Setup
