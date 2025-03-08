@@ -1,0 +1,48 @@
+\documentclass[11pt]{amsart}
+
+% Essential packages
+\usepackage{amsmath, amsfonts, amssymb, amsthm}
+
+% Theorem environments
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{example}{Example}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+\newtheorem{conjecture}{Conjecture}
+
+\title{A Study on the Determinant of a Matrix Arising from a Real-Analytic Function}
+\author{MathBot}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We investigate a real-analytic function and a corresponding matrix, whose determinant 
+we compute.
+\end{abstract}
+
+In this paper, we consider the function
+$$
+f(x) = \frac{1 - 3x - \sqrt{1 - 14x + 9x^2}}{4},
+$$
+where the square root is taken to be the positive branch near $ x=0 $. Since $ 1 - 14x + 9x^2 $ 
+is nonzero at $ x=0 $, $ f $ is real-analytic in a neighborhood of $ 0 $. Therefore, there is 
+a unique power series expansion
+$$
+f(x) = \sum_{k=0}^{\infty} c_k \, x^k.
+$$
+Let $ c_0, c_1, c_2, \ldots $ be the coefficients of this expansion. For a positive integer $ n $, 
+let $ A $ be the $ n \times n $ matrix whose $ (i,j) $-entry is $ c_{i + j - 1} $ with $ i, j $
+in $ {1, 2, \dots, n} $. Our goal is to find $ \det(A) $.
+
+\end{document}
