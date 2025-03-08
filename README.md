@@ -51,7 +51,7 @@ Each level operates with its own context and responsibilities:
 
 2. Install dependencies:
    ```bash
-   pip install google-generativeai asyncio tkinter
+   pip install google google-generativeai
    ```
 
 3. Configure your API key:
