@@ -45,8 +45,8 @@ Each level operates with its own context and responsibilities:
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/math-latex-generator.git
-   cd math-latex-generator
+   git clone https://github.com/justincasher/math_recursion
+   cd math_recursion
    ```
 
 2. Install dependencies:
