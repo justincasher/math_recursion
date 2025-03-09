@@ -9,7 +9,6 @@ from bots.L4_bot import L4Bot
 from config import Config
 from latex_labels import LabelManager
 from llm_call import llm_call
-from round_robin.L4_round_robin import L4RoundRobin
 
 
 class L3Bot:
@@ -18,6 +17,7 @@ class L3Bot:
             document: str, 
             section: str, 
             subsection_draft: str,
+            L1_instruction: str,
             L2_instruction: str, 
             L3_instruction: str,
             lbl_mgr: LabelManager
@@ -32,6 +32,7 @@ class L3Bot:
         """
         self.document = document
         self.section = section
+        self.L1_instruction = L1_instruction
         self.L2_instruction = L2_instruction 
         self.L3_instruction = L3_instruction
         self.subsection_draft = subsection_draft
@@ -83,6 +84,10 @@ class L3Bot:
     async def _reasoning_step_A(self):
         """Step A: Reason about what math could be added."""
         step_a_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -134,6 +139,10 @@ class L3Bot:
     async def _reasoning_step_B(self):
         """Step B: Propose new, logically independent math to be added."""
         step_c_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -202,6 +211,10 @@ class L3Bot:
     async def _reasoning_step_C(self):
         """Step C: Double-check that the proposed math is coherent and revise if needed."""
         step_c_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -235,6 +248,8 @@ class L3Bot:
             "You are on Step 1: Figuring out what needs be added next to the subsection.\n\n"  
 
             "You have reasoned and then proposed mathematics instructions that are logically independent. " 
+            "Since the bots will be working parallel, you thought about how any possible instructions depended on each other. "
+            "You should not propose adding an instruction if you need to finish an earlier instruction first. "
             "Go through your previous output and create a list of all the instructions that you "
             "deemed independent and should be added to the current subsection.\n\n"
 
@@ -264,73 +279,13 @@ class L3Bot:
             print(output)
 
 
-    async def _generate_math_list(self):
-        """LLM call to generate a list of math to add based on the preliminary reasoning."""
-        first_llm_prompt = (
-            "CURRENT DOCUMENT:\n\n"
-
-            f"{self.document}\n\n"
-
-            "SECTION INSTRUCTIONS\n\n"
-
-            f"{self.L2_instruction}\n\n"
-
-            "CURRENT SECTION:\n\n"
-
-            f"{self.section}\n\n"
-
-            "SUBSECTION INSTRUCTIONS:\n\n"
-
-            f"{self.L3_instruction}\n\n"
-
-            "CURRENT SUBSECTION (working draft):\n\n"
-
-            f"{self.subsection_draft}\n\n"
-
-            "REASONING:\n\n"
-
-            f"{self.prelim_reasoning_response}\n\n"
-
-            "TASK:\n\n"
-
-            "You are still on Step 1: Figuring out what math need to be added next to the current subsection.\n\n"
-
-            "You just reasoned about what math you need to add to the subsection next (see REASONING). "
-            "Since the bots will be working parallel, you thought about how any possible instructions depended on each other. "
-            "You should not propose adding an instruction if you need to finish an earlier instruction first. "
-
-            "Examples of instruction X depending on instruction Y are:\n"
-            "- If instruction X uses a definition from instruction Y.\n"
-            "- If instruction X builds on examples introduced in instruction Y.\n"
-            "- If instruction X references results from instruction Y.\n"
-            "- If instruction X proves a conjecture from instruction Y."
-            "- etc.\n\n"
-
-            "Now, write a list of what math you concluded from your reasoning that you should write next. "
-            "Make sure to say what type of math you want (theorem, proposition, lemma, example, conjecture, etc.), " 
-            "along with a description of what the math should contain. Also, be clear about what it should NOT contain "
-            "(i.e., what is being delegated to the other bots)."
-        )
-
-        self.reasoning_response = await llm_call(
-            prompt=first_llm_prompt,
-            system_prompt=self.system_prompt
-        )
-
-        if Config.L3_PRINT:
-            output = (
-                "\n" + "=" * 50 + "\n" +
-                f"L3 Bot Iteration #{self.iterations + 1} - List of new math:\n" +
-                "-" * 50 + "\n" +
-                f"{self.reasoning_response}\n" +
-                "=" * 50 + "\n"
-            )
-            print(output)
-
-
     async def _format_instructions_for_L4_bots(self):
         """LLM call to format instructions for L4 bots based on the math list, then sets up parallel tasks."""
         second_llm_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -376,13 +331,19 @@ class L3Bot:
 
             "Y is text of the instruction: A detailed explanation of what the L4 bot will figure out. "
             "Be sure to include both what the bot should do and what it should not do (i.e., what is being "
-            "delegated to other bots). If requested result is not very well known, you should require the bot to " 
-            "produce a proof."
+            "delegated to other bots).\n\n "
+
+            "Unless a result is well-known to the average graduate student, you should ALWAYS request a "
+            "proof of a result. Avoid definitive language; for instance, it is better to say 'prove or " 
+            "disprove X' instead of asserting the bot to 'prove X'. Never tell the bot to do anything " 
+            "using numerical methods such as code (Python), WolframAlpha, OEIS, a scientific calculator etc."
         )
+
         self.formatted_instructions_response = await llm_call(
             prompt=second_llm_prompt,
             system_prompt=self.system_prompt
         )
+
         if Config.L3_PRINT:
             output = (
                 "\n" + "=" * 50 + "\n" +
@@ -431,6 +392,7 @@ class L3Bot:
                 self.document, 
                 self.section, 
                 self.subsection_draft, 
+                self.L1_instruction,
                 self.L2_instruction, 
                 self.L3_instruction, 
                 instruction,
@@ -438,99 +400,40 @@ class L3Bot:
             )
             for instruction in self.environment_instructions
             for _ in range(Config.NUM_L4_BOTS)
-        ]
-
-    
-    async def _create_round_robin(self):
-        """
-        Create round robin tournaments for each instruction.
-        This method groups the L4 bots (from self.children) by their L4_instruction,
-        filters out those that are incomplete, and then creates pairwise L4RoundRobin
-        instances for each group with more than one complete bot.
-        """
-        # Group complete L4 bots by their instruction.
-        instruction_groups = defaultdict(list)
-        for child in self.children:
-            if not child.incomplete:
-                instruction_groups[child.L4_instruction].append(child)
-
-        # For each instruction group, create pairwise round robin matches.
-        for instruction, bots in instruction_groups.items():
-            if len(bots) > 1:
-                # Compare each pair only once.
-                for i in range(len(bots)):
-                    for j in range(i + 1, len(bots)):
-                        rr_match = L4RoundRobin(bots[i], bots[j])
-                        self.round_robin.append(rr_match)
-
-    
-    def _compute_round_robin_winners(self):
-        """
-        Compute the Elo ratings for each L4 bot based on the round robin tournament results,
-        and update self.children to retain only the winning bots for each instruction.
-        """
-        K = 32  # Elo update factor
-
-        # Group L4 bots by their instruction (all bots regardless of completeness).
-        groups = defaultdict(list)
-        for bot in self.children:
-            groups[bot.L4_instruction].append(bot)
-
-        # Initialize Elo ratings for each bot.
-        ratings = {bot: 1500 for bots in groups.values() for bot in bots}
-
-        # Update Elo ratings based on round robin matches.
-        for match in self.round_robin:
-            # Only process matches where both bots have ratings.
-            if match.bot1 in ratings and match.bot2 in ratings:
-                r1, r2 = ratings[match.bot1], ratings[match.bot2]
-                # Determine scores: 1 for win, 0 for loss, 0.5 for tie.
-                if match.result == 1:
-                    s1, s2 = 1, 0
-                elif match.result == 2:
-                    s1, s2 = 0, 1
-                else:
-                    s1, s2 = 0.5, 0.5
-                e1 = 1 / (1 + 10 ** ((r2 - r1) / 400))
-                e2 = 1 / (1 + 10 ** ((r1 - r2) / 400))
-                ratings[match.bot1] = r1 + K * (s1 - e1)
-                ratings[match.bot2] = r2 + K * (s2 - e2)
-
-        # Determine the winning bot for each instruction group.
-        winners = {}
-        for instr, bots in groups.items():
-            # Filter for complete bots.
-            complete_bots = [bot for bot in bots if not bot.incomplete]
-            if complete_bots:
-                winners[instr] = max(complete_bots, key=lambda b: ratings.get(b, 1500))
-            else:
-                # If no bots are complete, choose one randomly among all bots for this instruction.
-                winners[instr] = random.choice(bots)
-
-        # Update self.children: retain only the winning bot for each instruction.
-        self.children = list(winners.values())
+        ]        
         
 
     async def _draft_subsection_code(self):
         """LLM call to draft the subsection by integrating outputs from L4 bots."""
-        # Start by figuring out who wone the round robing tournament if 
-        # there was one
-        if Config.NUM_L4_BOTS > 1:
-            self._compute_round_robin_winners()
-
-        # Populate self.math_drafts with instructions and corresponding math drafts (or None)
+        # Group children by their L4_instruction
+        children_by_instruction = defaultdict(list)
         for child in self.children:
-            if not child.incomplete:
-                self.math_drafts[child.L4_instruction] = child.math_draft
-            else:
-                self.math_drafts[child.L4_instruction] = None
+            children_by_instruction[child.L4_instruction].append(child)
+
+        # Create a new list containing one complete bot per instruction (if available)
+        selected_children = []
+        for instruction, bots in children_by_instruction.items():
+            complete_bots = [bot for bot in bots if not bot.incomplete]
+            if complete_bots:
+                selected_children.append(random.choice(complete_bots))
+            # If no complete bots exist for an instruction, that instruction group is omitted
+
+        # Update self.children to only include the chosen complete bots
+        self.children = selected_children
 
         # Check: if all math drafts are None, skip drafting.
-        if all(draft is None for draft in self.math_drafts.values()):
+        if len(self.children) == 0:
             if Config.L3_PRINT:
-                print("All math drafts are None. Restarting llm_call_sequence.")
+                output = (
+                "\n" + "=" * 50 + "\n" +
+                f"L3 Bot Iteration #{self.iterations + 1} - Draft subsection code:\n" +
+                "-" * 50 + "\n" +
+                f"No children are complete. Restarting...\n" +
+                "=" * 50 + "\n"
+            )
+            print(output)
             self.restart = True
-            return None
+            return
 
         # Now build env_output based on the dictionary and track failed instructions
         env_output = ""
@@ -543,6 +446,10 @@ class L3Bot:
                 idx += 1
 
         third_llm_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -574,9 +481,11 @@ class L3Bot:
             "You need to write a new subsection draft to include the new mathematics. You should "
             "write like Serre and be economical: While you should show all necessary details, you "
             "should not include unnecessary or low-quality mathematics. In particular, if you find any "
-            "of the math blocks repetitive or useless in nature, do not include them. You are free to restructure "
-            "the text to incorporate the math that you want in a coherent manner, but you should not fundamentally "
-            "change any mathematical statements to have a different meaning.\n\n"
+            "of the math blocks repetitive or useless in nature, do not include them.\n\n" 
+            
+            "You are free to restructure the text to incorporate the math that you want in a coherent " 
+            "manner, but you should not fundamentally change any mathematical statements to have a " 
+            "different meaning. Only include mathematics from the blocks; do not derive any new results.\n\n"
 
             r"IMPORTANT: Always use proper LaTeX environments by using \begin{X}...\end{X} " 
             "where X can be theorem, proposition, lemma, example, proof, remark, definition, " 
@@ -588,7 +497,8 @@ class L3Bot:
             r"definition, corollary, etc. should have a label \label{Y}."
             "\n\n"
 
-            r"ONLY write out the subsection draft, starting the first line of your response with \subsection{title}, "
+            "First reason about how the subsection should be structured. Then, when you are ready,"
+            r"rite out the subsection draft, starting the first line of your response with \subsection{title}, "
             "where 'title' is what the subsection is named."
         )
 
@@ -623,6 +533,10 @@ class L3Bot:
     async def _final_decision_for_subsection(self):
         """LLM call to decide if the drafted subsection is complete or needs further refinement."""
         final_llm_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -687,7 +601,7 @@ class L3Bot:
         """
         if self.done:
             raise RuntimeError("L3 bot called after being marked done.")
-        if self.iterations >= Config.L3_REASONING_STEPS:
+        if not self.iterations < Config.L3_REASONING_STEPS:
             raise RuntimeError("Iteration limit reached: Maximum number of L3 reasoning steps exceeded.")
 
         # Build the llm call sequence up to formatting instructions.
@@ -695,21 +609,10 @@ class L3Bot:
             self._reasoning_step_A,
             self._reasoning_step_B,
             self._reasoning_step_C,
-            self._generate_math_list,
             self._format_instructions_for_L4_bots,
-        ]
-
-        # If multiple L4 bots are configured, create round robin tournaments after formatting instructions.
-        if Config.NUM_L4_BOTS > 1:
-            llm_call_sequence.extend([
-                self._create_round_robin,
-            ])
-
-        # Append the remaining steps.
-        llm_call_sequence.extend([
             self._draft_subsection_code,
-            self._final_decision_for_subsection,
-        ])
+            self._final_decision_for_subsection
+        ]
 
         # Execute the current llm call.
         await llm_call_sequence[self.current_llm_call_index]()

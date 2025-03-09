@@ -8,6 +8,11 @@ class Config:
     These values can be edited directly in this file when needed.
     """
 
+    # Document to edit and instructions
+    DOC_LOAD = "test_problems/Putnam_2024_A6.txt"
+    DOC_SAVE = "math_new.txt"   
+    DOC_INSTRUCTION = "test_problems/Putnam_2024_A6_instruction.txt"
+
     # The default model name to use for Gemini requests
     DEFAULT_MODEL_NAME = "gemini-2.0-flash"
 
@@ -18,34 +23,26 @@ class Config:
     MAX_RETRIES = 5        # Number of total attempts
     BACKOFF_FACTOR = 1.0   # Base wait time; can be adjusted as needed
 
-    # Document to edit
-    DOC_LOAD = "test_problems/Putnam_2024_A6.txt"
-    DOC_SAVE = "math_new.txt"   
-
     # Whether or not to use parallel calls (debugging)
     PARALLEL = True
 
     # Number of steps at each
     L1_REASONING_STEPS = 5
-    L2_REASONING_STEPS = 2
-    L3_REASONING_STEPS = 2
-    L4_REASONING_STEPS = 2
+    L2_REASONING_STEPS = 3
+    L3_REASONING_STEPS = 1
+    L4_REASONING_STEPS = 1
 
-    # This creates multiple bots at each level, so it is not recommended 
-    # to choose many bots for each. For reviewers, it means that we 
-    # have that many check the math, and any rejection means we try again. 
-    # For every other bot type, it means we try that many times at creating 
-    # the desired section, subsection, math, etc., and then perform a round 
-    # robin tournament to determine the best result.
-    NUM_L2_BOTS = 1
-    NUM_L3_BOTS = 1
+    # NUM_L4_BOTS defines how many L4 bots are instantiated per task.
+    # Each L4 bot generates a candidate result (e.g., for sections or math).
     NUM_L4_BOTS = 3
+    # NUM_REVIEWERS sets the number of reviewer bots that verify the result.
+    # If any reviewer rejects a candidate, the generation process is retried.
     NUM_REVIEWERS = 3
 
     # Control flags for console output at different debug levels
     L1_PRINT = False
     L2_PRINT = False
-    L3_PRINT = False
+    L3_PRINT = True
     L4_PRINT = False
     L4_REVIEW_PRINT = False
 

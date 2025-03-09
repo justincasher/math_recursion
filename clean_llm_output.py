@@ -27,6 +27,7 @@ def clean_llm_output(llm_output: str) -> str:
         "Final Answer:",
         "MATH BLOCKS",
         "SUBSECTION INSTRUCTIONS",
+        "NEXT STEP:"
     }
     for line in lines:
         if any(line.lower().startswith(bp.lower()) for bp in bad_phrases):

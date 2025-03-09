@@ -9,13 +9,13 @@ from bots.L2_bot import L2Bot
 from config import Config
 from latex_labels import LabelManager
 from llm_call import llm_call
-from round_robin.L2_round_robin import L2RoundRobin
 
 
 class L1Bot:
     def __init__(
             self, 
             document_draft: str, 
+            L1_instruction: str,
             lbl_mgr: LabelManager
         ):
         """
@@ -49,6 +49,7 @@ class L1Bot:
 
         # Primary document state and iteration details
         self.document_draft = document_draft
+        self.L1_instruction = L1_instruction
         self.lbl_mgr = lbl_mgr
 
         # Variables used in pre-parallel processing
@@ -93,6 +94,10 @@ class L1Bot:
     async def _preliminary_reasoning(self):
         """LLM call to reason about which sections could be added next."""
         reasoning_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document_draft}\n\n"
@@ -128,6 +133,7 @@ class L1Bot:
             "- Only complete A)–D); do NOT write anything else.\n"
             "- It is best to be stringent when proposing sections.\n"
             "- Focus only on true content sections, not document components like abstract, introduction, etc.\n"
+            "- These new sections and section edits should help us achieve the document instructions."
         )
         
         self.prelim_reasoning_response = await llm_call(
@@ -149,6 +155,10 @@ class L1Bot:
     async def _section_reasoning_list(self):
         """LLM call to produce a list of sections to be added immediately based on prior reasoning."""
         first_llm_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document_draft}\n\n"
@@ -192,6 +202,10 @@ class L1Bot:
     async def _format_instructions_for_L2(self):
         """LLM call to convert the section reasoning into formatted instructions for L2 bots."""
         second_llm_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document_draft}\n\n"
@@ -227,10 +241,11 @@ class L1Bot:
             "Be sure to include both what the bot should do and what it should not do (i.e., what is being "
             "delegated to other bots).\n\n"
 
-            "You should take a high-level approach when describing what the section contains. "
-            "Asserting that it MUST contain a certain result which is, in fact, infeasible, "
+            "You should take a high-level approach when writing the text of the instruction. "
+            "Asserting that the section MUST contain a certain result which is, in fact, infeasible, "
             "or must prove a result via a certain method that does not work, will derail the bots. "
-            "You can make suggestions, but try to avoid definitive language."
+            "You can make suggestions, but try to avoid definitive language; for instance, use " 
+            "terms like 'investigate X' instead of 'prove X'"
         )
 
         self.formatted_instructions_response = await llm_call(
@@ -270,90 +285,20 @@ class L1Bot:
             self.L2_instructions.append("\n".join(current_instruction))
 
         # Save the tasks for parallel execution by instantiating L2Bot children.
-        self.children = []
-        for L2_instruction in self.L2_instructions:
-            lines = [line.strip() for line in L2_instruction.splitlines() if line.strip()]
-            section_title = lines[0] if lines else ""
-            section_draft = self.section_blocks.get(section_title, "N/A")
-            for _ in range(Config.NUM_L2_BOTS):
-                self.children.append(
-                    L2Bot(
-                        self.document_draft, 
-                        L2_instruction, 
-                        section_draft,
-                        self.lbl_mgr
-                    )
-                )
-
-    
-    async def _create_round_robin(self):
-        """
-        Create round robin tournaments for each instruction.
-        This method groups the L2 bots (from self.children) by their L2_instruction
-        and then creates pairwise L2RoundRobin instances for each group with more 
-        than one complete bot.
-        """
-        self.round_robin = []
-        instruction_groups = defaultdict(list)
-        for child in self.children:
-            instruction_groups[child.L2_instruction].append(child)
-
-        for instruction, bots in instruction_groups.items():
-            if len(bots) > 1:
-                for i in range(len(bots)):
-                    for j in range(i + 1, len(bots)):
-                        rr_match = L2RoundRobin(bots[i], bots[j])
-                        self.round_robin.append(rr_match)
-
-
-    def _compute_round_robin_winners(self):
-        """
-        Compute the Elo ratings for each L2 bot based on the round robin tournament results,
-        and update self.children to retain only the winning bots for each instruction.
-        """
-        K = 32  # Elo update factor
-
-        # Group L2 bots by their instruction (all bots regardless of completeness).
-        groups = defaultdict(list)
-        for bot in self.children:
-            groups[bot.L2_instruction].append(bot)
-
-        # Initialize Elo ratings for each bot.
-        ratings = {bot: 1500 for bots in groups.values() for bot in bots}
-
-        # Update Elo ratings based on round robin matches.
-        for match in self.round_robin:
-            # Only process matches where both bots have ratings.
-            if match.bot1 in ratings and match.bot2 in ratings:
-                r1, r2 = ratings[match.bot1], ratings[match.bot2]
-                # Determine scores: 1 for win, 0 for loss, 0.5 for tie.
-                if match.result == 1:
-                    s1, s2 = 1, 0
-                elif match.result == 2:
-                    s1, s2 = 0, 1
-                else:
-                    s1, s2 = 0.5, 0.5
-                e1 = 1 / (1 + 10 ** ((r2 - r1) / 400))
-                e2 = 1 / (1 + 10 ** ((r1 - r2) / 400))
-                ratings[match.bot1] = r1 + K * (s1 - e1)
-                ratings[match.bot2] = r2 + K * (s2 - e2)
-
-        # Determine the winning bot for each instruction group.
-        winners = {}
-        for instr, bots in groups.items():
-            winners[instr] = max(bots, key=lambda b: ratings.get(b, 1500))
-
-        # Update self.children: retain only the winning bot for each instruction.
-        self.children = list(winners.values())
+        self.children = [
+            L2Bot(
+                self.document_draft,
+                self.L1_instruction,
+                L2_instruction,
+                self.section_blocks.get(L2_instruction, "N/A"),
+                self.lbl_mgr
+            )
+            for L2_instruction in self.L2_instructions
+        ]
 
 
     async def _draft_document_code(self):
         """LLM call to integrate L2 bots’ outputs and produce a new LaTeX document draft with placeholders."""
-        # Start by figuring out who wone the round robing tournament if 
-        # there was one
-        if Config.NUM_L2_BOTS > 1:
-            self._compute_round_robin_winners()
-
         # Populate self.section_blocks with section titles and corresponding section drafts (or None)
         for child in self.children:
             if child.section_draft is not None:
@@ -373,6 +318,10 @@ class L1Bot:
                 idx += 1
 
         third_llm_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document_draft}\n\n"
@@ -445,6 +394,10 @@ class L1Bot:
     async def _final_decision(self):
         """LLM call to determine if the updated document is complete or needs further refinement."""
         final_llm_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT DRAFT:\n\n"
 
             f"{self.document_draft}\n\n"
@@ -499,7 +452,7 @@ class L1Bot:
         """
         if self.done:
             raise RuntimeError("L1 bot called after being marked done.")
-        if self.iterations >= Config.L1_REASONING_STEPS:
+        if not self.iterations < Config.L1_REASONING_STEPS:
             raise RuntimeError("Iteration limit reached: Maximum number of L1 reasoning steps exceeded.")
 
         # Sequence of LLM calls in one iteration.
@@ -507,19 +460,9 @@ class L1Bot:
             self._preliminary_reasoning,
             self._section_reasoning_list,
             self._format_instructions_for_L2,
-        ]
-
-        # If multiple L3 bots are configured, incorporate round robin tournaments.
-        if Config.NUM_L2_BOTS > 1:
-            llm_call_sequence.extend([
-                self._create_round_robin,
-            ])
-
-        # Append the remaining steps.
-        llm_call_sequence.extend([
             self._draft_document_code,
             self._final_decision,
-        ])
+        ]
 
         # Execute the current LLM call.
         await llm_call_sequence[self.current_llm_call_index]()

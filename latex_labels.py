@@ -11,7 +11,7 @@ class LabelManager:
     def __init__(self, document):
         """
         Initialize the latex_labels class with a LaTeX document string.
-        It collects all existing labels from occurrences of \label{X}
+        It collects all existing labels from occurrences of \\label{X}
         and stores them in a set to avoid duplication.
         """
         pattern = r'\\label\{([^}]+)\}'

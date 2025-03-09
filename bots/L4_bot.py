@@ -16,6 +16,7 @@ class L4Bot:
             document: str, 
             section: str, 
             subsection: str, 
+            L1_instruction: str,
             L2_instruction: str,
             L3_instruction: str,
             L4_instruction: str,
@@ -34,6 +35,7 @@ class L4Bot:
         self.document = document
         self.section = section
         self.subsection = subsection
+        self.L1_instruction = L1_instruction
         self.L2_instruction = L2_instruction
         self.L3_instruction = L3_instruction
         self.L4_instruction = L4_instruction
@@ -82,6 +84,10 @@ class L4Bot:
         about how to produce the requested mathematics.
         """
         reasoning_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -154,6 +160,10 @@ class L4Bot:
         After the call, it also instantiates the parallel ReviewBot tasks.
         """
         latex_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -238,6 +248,10 @@ class L4Bot:
         )
 
         review_prompt = (
+            "DOCUMENT INSTRUCTIONS:\n\n"
+
+            f"{self.L1_instruction}\n\n"
+
             "CURRENT DOCUMENT:\n\n"
 
             f"{self.document}\n\n"
@@ -290,7 +304,7 @@ class L4Bot:
             self.done = True
             self.incomplete = False
         # If we ran out of iterations, mark as done but incomplete
-        if not self.iterations < Config.L4_REASONING_STEPS:
+        elif not self.iterations < Config.L4_REASONING_STEPS:
             self.done = True
             self.incomplete = True
 
@@ -302,7 +316,7 @@ class L4Bot:
         """
         if self.done:
             raise RuntimeError("L4 bot called after being marked done.")
-        if self.iterations >= Config.L4_REASONING_STEPS:
+        if not self.iterations < Config.L4_REASONING_STEPS:
             raise RuntimeError("Iteration limit reached: Maximum number of L4 reasoning steps exceeded.")
 
         llm_call_sequence = [

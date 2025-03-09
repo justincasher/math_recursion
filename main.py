@@ -15,42 +15,61 @@ from visualizer import Visualizer
 
 def get_leaves(level_bot):
     """
-    Recursively retrieves all leaf nodes from a tree of bots that are not marked as done.
+    Recursively retrieves all leaf nodes from a tree of bots that are not marked as done,
+    with an added filtering step. For the children of each node, groups are formed based on
+    the combination of L2_instruction, L3_instruction, and L4_instruction. If any leaf in a
+    group is marked as done, all leaves in that group are marked as done before the recursion
+    proceeds.
 
     A leaf node is defined as a bot that:
       - Is not already marked as done.
-      - Either does not have 'children' or 'round_robin' attributes, or both are empty,
-        or all bots in these lists are marked as done.
+      - Either does not have a 'children' attribute or its children are all marked as done.
 
     Parameters:
-        level_bot (object): An instance of a bot in the bot tree. It is expected to have a 'done' 
-                            attribute (a boolean) and optionally 'children' and 'round_robin' attributes (lists).
+        level_bot (object): An instance of a bot in the bot tree. It is expected to have a 'done'
+                            attribute (a boolean) and optionally a 'children' attribute (list).
 
     Returns:
         list: A list of leaf bot nodes that are eligible for further updates.
               Nodes that are already marked as done are skipped.
     """
+    # If the current bot is done, it doesn't contribute any leaves.
     if getattr(level_bot, 'done', False):
         return []
-    
-    # Retrieve children and round_robin lists if they exist; default to empty lists otherwise.
+
+    # Retrieve children list if it exists; default to empty list otherwise.
     children = getattr(level_bot, 'children', [])
-    round_robin = getattr(level_bot, 'round_robin', [])
-    
+
+    # If there are children, first group them by the combined instructions.
+    if children:
+        groups = {}
+        for child in children:
+            key = (
+                getattr(child, 'L2_instruction', None),
+                getattr(child, 'L3_instruction', None),
+                getattr(child, 'L4_instruction', None)
+            )
+            groups.setdefault(key, []).append(child)
+
+        # For each group, if any child is marked as done, mark every child in that group as done.
+        for group in groups.values():
+            if len(group) > 1 and any(getattr(child, 'done', False) for child in group):
+                for child in group:
+                    child.done = True
+
+    # Re-fetch children in case any have been marked as done.
+    children = getattr(level_bot, 'children', [])
+
     # Determine if this node is a leaf:
-    # It is a leaf if both children and round_robin are empty,
-    # or if all bots in both lists are marked as done.
-    if (not children and not round_robin) or \
-       (all(getattr(child, 'done', False) for child in children) and 
-        all(getattr(child, 'done', False) for child in round_robin)):
+    # It is a leaf if there are no children or all children are marked as done.
+    if not children or all(getattr(child, 'done', False) for child in children):
         return [level_bot]
-    
+
+    # Otherwise, recursively collect leaves from children.
     leaves = []
     for child in children:
         leaves.extend(get_leaves(child))
-    for child in round_robin:
-        leaves.extend(get_leaves(child))
-    
+
     return leaves
 
 
@@ -103,22 +122,29 @@ async def sequential_updates(L1, visualizer=None):
                 
         leaves = get_leaves(L1)
         if leaves:
-            # Process the next leaf in a depth-first manner
+            # Process the next leaf in a depth-first manner.
             next_leaf = leaves[0]
             await next_leaf.step()
         else:
-            # If no leaf is available, wait briefly before retrying
+            # If no leaf is available, wait briefly before retrying.
             await asyncio.sleep(0.1)
 
 
 if __name__ == "__main__":
-    # 1. Load the existing LaTeX document from math.txt
+    # 1. Load the existing LaTeX document and instruction.
     with open(Config.DOC_LOAD, "r", encoding="utf-8") as f:
         original_document = f.read()
 
+    with open(Config.DOC_INSTRUCTION, "r", encoding="utf-8") as f:
+        doc_instruction = f.read()
+
     # 2. Initialize the L1 bot with the document and label manager.
     lbl_mgr = LabelManager(original_document)
-    L1 = L1Bot(original_document, lbl_mgr)
+    L1 = L1Bot(
+        original_document,
+        doc_instruction,
+        lbl_mgr
+    )
     
     if Config.VISUALIZER:
         # 3a. Create the Visualizer instance (this sets up the Tkinter GUI).

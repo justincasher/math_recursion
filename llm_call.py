@@ -14,7 +14,8 @@ from config import Config
 
 async def llm_call(prompt: str, system_prompt: Optional[str] = None) -> str:
     """
-    Asynchronously gets a text response from a specified model based on the provided prompt and optional system prompt.
+    Asynchronously gets a text response from a specified model based on the provided prompt 
+    and optional system prompt.
 
     Parameters:
         prompt (str): The text prompt to send to the model.
@@ -45,22 +46,22 @@ async def llm_call(prompt: str, system_prompt: Optional[str] = None) -> str:
                     contents=[prompt],
                     config=config_obj
                 )
+                # Check if the API response is empty and treat it as a server error
+                if response.text is None:
+                    raise ServerError("Empty response text (None) received from API.")
                 output = clean_llm_output(response.text)
                 return output
             else:
                 raise ValueError(f"Unsupported model: {Config.DEFAULT_MODEL_NAME}")
         except ServerError as e:
-            if "503" in str(e) and "UNAVAILABLE" in str(e):
-                if attempt < Config.MAX_RETRIES - 1:
-                    sleep_time = Config.BACKOFF_FACTOR * (2 ** attempt)
-                    if Config.PRINT_SERVER_ERROR:
-                        print(
-                            f"Server overloaded (503). "
-                            f"Retrying in {sleep_time:.1f} seconds... "
-                            f"(Attempt {attempt+1} of {Config.MAX_RETRIES})"
-                        )
-                    await asyncio.sleep(sleep_time)
-                else:
-                    raise
+            if attempt < Config.MAX_RETRIES - 1:
+                sleep_time = Config.BACKOFF_FACTOR * (2 ** attempt)
+                if Config.PRINT_SERVER_ERROR:
+                    print(
+                        f"Server error:\n{str(e)}.\n"
+                        f"Retrying in {sleep_time:.1f} seconds... "
+                        f"(Attempt {attempt+1} of {Config.MAX_RETRIES})"
+                    )
+                await asyncio.sleep(sleep_time)
             else:
                 raise

@@ -32,11 +32,8 @@ class ReviewBot:
 
             "You will go through a multi-step process composed of the following:\n"
             "1. Sentence-by-sentence analysis.\n"
-            "2. Claim verification.\n"
-            "3. Creating a numbered list of potential errors.\n"
-            "4. Verifying (confirm or dismiss) each potential error.\n"
-            "5. Clarification of confirmed errors.\n"
-            "6. Final summary paragraph indicating whether the math is acceptable or needs revision, "
+            "2. Verifying (confirm or dismiss) each potential error.\n"
+            "3. Final summary paragraph indicating whether the math is acceptable or needs revision, "
             "ending with either 'ACCEPT' or 'REJECT'.\n\n"
 
             "Notes:\n"
@@ -60,7 +57,7 @@ class ReviewBot:
 
     async def _sentence_logic_analysis(self):
         """
-        Step 1A: Analyze the logic of each sentence.
+        Step 1: Analyze the logic of each sentence.
         For each sentence, re-check the logic, calculations, and notation. 
         End each sentence's analysis with "CORRECT" or "FALSE" and note any logical mismatches with the instructions.
         """
@@ -89,8 +86,13 @@ class ReviewBot:
 
             "For each sentence in the math to check, do the following:\n "
             "A) Write out the sentence.\n"
-            "B) Reason about whether it is correct.\n"
-            "C) At the end of each sentence's analysis, write 'CORRECT' or 'FALSE'."
+            "B) If it is a logical implication, reason about whether it is valid. If it is a " 
+            "claim (such as one made in theorem), write down where it was proven.\n"
+            "C) At the end of each sentence's analysis, write 'CORRECT' or 'FALSE' " 
+            "to indicate whether the sentence is true.\n\n"
+
+            "Once you are done with analyzing each sentence, create a list of any potential errors found in "
+            "the work."
         )
 
         self.sentence_logic_analysis = await llm_call(
@@ -109,119 +111,10 @@ class ReviewBot:
             print(output)
 
 
-    async def _claims_verification(self):
-        """
-        Step 2: Verify that all claims are proven.
-        For every claim made in the document, check that it has an accompanying proof (unless it is a well-known result or a conjecture).
-        Report any unproven claims or mismatches.
-        """
-        prompt = (
-            "CURRENT DOCUMENT:\n\n"
-
-            f"{self.document}\n\n"
-
-            "CURRENT SECTION:\n\n"
-
-            f"{self.section}\n\n"
-
-            "CURRENT SUBSECTION:\n\n"
-
-            f"{self.subsection}\n\n"
-
-            "MATH INSTRUCTION:\n\n"
-
-            f"{self.instruction}\n\n"
-
-            "MATH TO CHECK:\n\n"
-
-            f"{self.environment_block}\n\n"
-
-            "You are on Step 2: Verify that all claims made in the math to check have indeed been proven.\n\n"
-
-            "For each claim made in any theorem, proposition, lemma, etc. do the following:\n" 
-            "A) Write out the claim."
-            "B) Reason about whether or not claim has a complete proof."
-            "C) Write a 'CORRECT' to indicate if the claim is proven or does not need proof, else 'False'c.\n\n"
-            
-            "Finally, note any mismatches with the provided instruction and the math to check. Be lenient."
-        )
-
-        self.claims_verification = await llm_call(
-            prompt=prompt, 
-            system_prompt=self.system_prompt
-        )
-
-        if Config.L4_REVIEW_PRINT:
-            output = (
-                "\n" + "=" * 50 + "\n" +
-                f"Review Bot Iteration #{self.iterations + 1} - Step 2 - Claims Verification\n" +
-                "-" * 50 + "\n" +
-                f"{self.claims_verification}\n" +
-                "=" * 50 + "\n"
-            )
-            print(output)
-
-
-    async def _list_errors(self):
-        """
-        Step 3: Create a numbered list of potential errors.
-        Based on the analyses from Steps 1A and 1B, list potential errors.
-        If no errors are identified, explicitly state so.
-        """
-        prompt = (
-            "CURRENT DOCUMENT:\n\n"
-
-            f"{self.document}\n\n"
-
-            "CURRENT SECTION:\n\n"
-
-            f"{self.section}\n\n"
-
-            "CURRENT SUBSECTION:\n\n"
-
-            f"{self.subsection}\n\n"
-
-            "MATH INSTRUCTION:\n\n"
-
-            f"{self.instruction}\n\n"
-
-            "MATH TO CHECK:\n\n"
-
-            f"{self.environment_block}\n\n"
-
-            "SENTENCE LOGIC ANALYSIS:\n\n"
-
-            f"{self.sentence_logic_analysis}\n\n"
-
-            "CLAIMS VERIFICATION:\n\n"
-            
-            f"{self.claims_verification}\n\n"
-
-            "You are on Step 3: Create a numbered list of potential errors based on the above analyses.\n\n"
-
-            "Based on the sentence logic analysis and claim verification, create a list of all potential errors " 
-            "in the math to check. If no errors are identified, state explicitly that there are no errors."
-        )
-
-        self.error_list = await llm_call(
-            prompt=prompt, 
-            system_prompt=self.system_prompt
-        )
-
-        if Config.L4_REVIEW_PRINT:
-            output = (
-                "\n" + "=" * 50 + "\n" +
-                f"Review Bot Iteration #{self.iterations + 1} - Step 3 - List Potential Errors\n" +
-                "-" * 50 + "\n" +
-                f"{self.error_list}\n" +
-                "=" * 50 + "\n"
-            )
-            print(output)
-
 
     async def _verify_errors(self):
         """
-        Step 4: Verify each potential error.
+        Step 2: Verify each potential error.
         For each error in the list, decide whether it is CONFIRMED (a genuine error) or DISMISSED, 
         providing a short collaborative explanation.
         """
@@ -248,16 +141,17 @@ class ReviewBot:
 
             "POTENTIAL ERRORS:\n\n"
 
-            f"{self.error_list}\n\n"
+            f"{self.sentence_logic_analysis}\n\n"
 
-            "You are on Step 4: Verify (confirm or dismiss) each potential error.\n\n"
+            "You are on Step 2: Verify (confirm or dismiss) each potential error.\n\n"
 
             "Another bot has identified the above as being potential errors. However, you need "
             "to be critical and truly determine whether these are indeed errors or not.\n\n"
 
             "For each potential error, do the following:\n"
             "A) Reason about the validity of the objection.\n"
-            "B) Write 'CONFIRMED' or 'DISMISSED'.\n\n"
+            "B) Double check your reasoning.\n"
+            "C) Write 'CONFIRMED' or 'DISMISSED'.\n\n"
 
             "If there are no errors, simply write 'NO ERRORS'."
         )
@@ -280,7 +174,7 @@ class ReviewBot:
 
     async def _final_summary(self):
         """
-        Step 6: Produce a final summary.
+        Step 3: Produce a final summary.
         Write a summary that references any confirmed errors and highlights correct portions, ending with either 'ACCEPT' or 'REJECT'.
         """
         prompt = (
@@ -312,7 +206,7 @@ class ReviewBot:
 
             f"{self.verified_errors}\n\n"
 
-            "You are on Step 6: Write a final summary of the review.\n\n"
+            "You are on Step 3: Write a final summary of the review.\n\n"
 
             "Reference any confirmed errors from the error list. "
             "Provide direct quotes of the problematic text and explain the error you found. "
@@ -353,8 +247,6 @@ class ReviewBot:
 
         llm_call_sequence = [
             self._sentence_logic_analysis,
-            self._claims_verification,
-            self._list_errors,
             self._verify_errors,
             self._final_summary,
         ]
